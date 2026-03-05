@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Usage Monitor — Menu Bar Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 48px;
+  }
+
+  .section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 16px;
+    align-self: flex-start;
+    max-width: 720px;
+    width: 100%;
+  }
+
+  /* ═══ MENU BAR STRIP ═══ */
+  .menubar-strip {
+    width: 720px;
+    height: 28px;
+    background: linear-gradient(180deg, #3a3a3c, #2c2c2e);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 12px;
+    gap: 16px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+
+  .menubar-item {
+    font-size: 12px;
+    color: #d1d1d6;
+    opacity: 0.6;
+  }
+
+  .menubar-icon {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background 0.15s;
+  }
+
+  .menubar-icon:hover {
+    background: rgba(255,255,255,0.1);
+  }
+
+  .menubar-icon.active {
+    background: rgba(255,255,255,0.15);
+  }
+
+  /* ═══ BATTERY ICON ═══ */
+  .battery-icon {
+    position: relative;
+    width: 22px;
+    height: 11px;
+  }
+
+  .battery-body {
+    width: 20px;
+    height: 11px;
+    border: 1.5px solid #d1d1d6;
+    border-radius: 2.5px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .battery-cap {
+    position: absolute;
+    right: -3px;
+    top: 3px;
+    width: 2px;
+    height: 5px;
+    background: #d1d1d6;
+    border-radius: 0 1px 1px 0;
+  }
+
+  .battery-fill {
+    position: absolute;
+    left: 1px;
+    top: 1px;
+    bottom: 1px;
+    border-radius: 1px;
+    transition: width 0.3s, background 0.3s;
+  }
+
+  .battery-fill.high { background: #30d158; }
+  .battery-fill.medium { background: #ffd60a; }
+  .battery-fill.low { background: #ff6b35; }
+  .battery-fill.critical { background: #ff453a; }
+
+  .battery-pct {
+    font-size: 10px;
+    font-weight: 600;
+    color: #d1d1d6;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══ STATES ROW ═══ */
+  .states-row {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 48px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .state-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .state-card .menubar-strip {
+    width: 200px;
+    justify-content: center;
+    margin-bottom: 0;
+  }
+
+  .state-label {
+    font-size: 11px;
+    color: #888;
+    font-weight: 500;
+  }
+
+  /* ═══ DROPDOWN PANEL ═══ */
+  .dropdown-container {
+    position: relative;
+    width: 320px;
+    margin-top: 4px;
+    margin-bottom: 48px;
+  }
+
+  .dropdown {
+    background: #2c2c2e;
+    border: 1px solid #48484a;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.05);
+    width: 100%;
+  }
+
+  .dropdown-arrow {
+    position: absolute;
+    top: -6px;
+    right: 40px;
+    width: 12px;
+    height: 12px;
+    background: #2c2c2e;
+    border-left: 1px solid #48484a;
+    border-top: 1px solid #48484a;
+    transform: rotate(45deg);
+  }
+
+  .dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #3a3a3c;
+  }
+
+  .dropdown-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .plan-badge {
+    font-size: 10px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #d4a574, #c4956a);
+    color: #1a1a1a;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .overall-bar {
+    margin-bottom: 16px;
+  }
+
+  .overall-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #8e8e93;
+    margin-bottom: 6px;
+  }
+
+  .overall-track {
+    width: 100%;
+    height: 8px;
+    background: #1c1c1e;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .overall-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .overall-fill.high { background: linear-gradient(90deg, #30d158, #34c759); }
+  .overall-fill.medium { background: linear-gradient(90deg, #ffd60a, #ffcc00); }
+  .overall-fill.low { background: linear-gradient(90deg, #ff9500, #ff6b35); }
+  .overall-fill.critical { background: linear-gradient(90deg, #ff453a, #ff3b30); }
+
+  /* ═══ METER ROWS ═══ */
+  .meters-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .meter-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .meter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .meter-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #e5e5ea;
+  }
+
+  .meter-value {
+    font-size: 11px;
+    color: #8e8e93;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meter-track {
+    width: 100%;
+    height: 6px;
+    background: #1c1c1e;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  .meter-fill.opus { background: linear-gradient(90deg, #bf5af2, #a855f7); }
+  .meter-fill.sonnet { background: linear-gradient(90deg, #64d2ff, #5ac8fa); }
+  .meter-fill.haiku { background: linear-gradient(90deg, #30d158, #34c759); }
+  .meter-fill.code { background: linear-gradient(90deg, #ff9f0a, #ff9500); }
+
+  .meter-sublabel {
+    font-size: 10px;
+    color: #636366;
+  }
+
+  /* ═══ FOOTER ═══ */
+  .dropdown-footer {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #3a3a3c;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .reset-time {
+    font-size: 10px;
+    color: #636366;
+  }
+
+  .refresh-btn {
+    font-size: 11px;
+    color: #64d2ff;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-weight: 500;
+  }
+
+  .refresh-btn:hover {
+    text-decoration: underline;
+  }
+
+  /* ═══ SCENARIOS ═══ */
+  .scenarios {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .scenario {
+    flex: 1;
+    min-width: 300px;
+    max-width: 320px;
+  }
+
+  .scenario-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #aaa;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  /* ═══ NOTIFICATION MOCKUP ═══ */
+  .notification-section {
+    width: 100%;
+    max-width: 720px;
+    margin-top: 48px;
+  }
+
+  .notification {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #2c2c2e;
+    border: 1px solid #48484a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    max-width: 360px;
+    margin: 0 auto;
+  }
+
+  .notif-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #d4a574, #c4956a);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .notif-content {
+    flex: 1;
+  }
+
+  .notif-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+
+  .notif-body {
+    font-size: 12px;
+    color: #8e8e93;
+    line-height: 1.4;
+  }
+
+  .notif-time {
+    font-size: 10px;
+    color: #636366;
+    flex-shrink: 0;
+  }
+
+  /* ═══ TOOLTIP ═══ */
+  .tooltip-demo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 48px;
+  }
+
+  .tooltip {
+    background: #1c1c1e;
+    border: 1px solid #48484a;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #e5e5ea;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+
+  .page-divider {
+    width: 100%;
+    max-width: 720px;
+    border: none;
+    border-top: 1px solid #3a3a3c;
+    margin: 16px 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Claude Usage Monitor</h1>
+<p class="subtitle">macOS Menu Bar App — Design Mockups</p>
+
+<!-- ═══════════════ SECTION 1: MENU BAR STATES ═══════════════ -->
+<p class="section-label" style="text-align:center; max-width:none;">Menu Bar Icon States</p>
+
+<div class="states-row">
+  <div class="state-card">
+    <div class="menubar-strip">
+      <div class="menubar-icon active">
+        <span class="battery-pct">73%</span>
+        <div class="battery-icon">
+          <div class="battery-body">
+            <div class="battery-fill high" style="width:73%"></div>
+          </div>
+          <div class="battery-cap"></div>
+        </div>
+      </div>
+    </div>
+    <span class="state-label">Plenty remaining</span>
+  </div>
+
+  <div class="state-card">
+    <div class="menubar-strip">
+      <div class="menubar-icon active">
+        <span class="battery-pct">41%</span>
+        <div class="battery-icon">
+          <div class="battery-body">
+            <div class="battery-fill medium" style="width:41%"></div>
+          </div>
+          <div class="battery-cap"></div>
+        </div>
+      </div>
+    </div>
+    <span class="state-label">Moderate usage</span>
+  </div>
+
+  <div class="state-card">
+    <div class="menubar-strip">
+      <div class="menubar-icon active">
+        <span class="battery-pct">18%</span>
+        <div class="battery-icon">
+          <div class="battery-body">
+            <div class="battery-fill low" style="width:18%"></div>
+          </div>
+          <div class="battery-cap"></div>
+        </div>
+      </div>
+    </div>
+    <span class="state-label">Running low</span>
+  </div>
+
+  <div class="state-card">
+    <div class="menubar-strip">
+      <div class="menubar-icon active">
+        <span class="battery-pct">4%</span>
+        <div class="battery-icon">
+          <div class="battery-body">
+            <div class="battery-fill critical" style="width:4%"></div>
+          </div>
+          <div class="battery-cap"></div>
+        </div>
+      </div>
+    </div>
+    <span class="state-label">Nearly depleted</span>
+  </div>
+</div>
+
+<!-- ═══════════════ HOVER TOOLTIP ═══════════════ -->
+<div class="tooltip-demo">
+  <p class="section-label" style="text-align:center; max-width:none; margin-bottom:8px;">Hover Tooltip</p>
+  <div class="tooltip">73% remaining · Resets in 2h 14m</div>
+</div>
+
+<hr class="page-divider" style="margin-top:40px;">
+
+<!-- ═══════════════ SECTION 2: EXPANDED DROPDOWNS ═══════════════ -->
+<p class="section-label" style="text-align:center; max-width:none;">Click to Expand — Usage Breakdown</p>
+
+<div class="scenarios">
+
+  <!-- SCENARIO A: Healthy usage -->
+  <div class="scenario">
+    <p class="scenario-title">Healthy</p>
+    <div class="dropdown-container">
+      <div class="dropdown">
+        <div class="dropdown-arrow"></div>
+        <div class="dropdown-header">
+          <span class="dropdown-title">Claude Usage</span>
+          <span class="plan-badge">Max 5×</span>
+        </div>
+
+        <div class="overall-bar">
+          <div class="overall-label">
+            <span>Overall</span>
+            <span>27% used</span>
+          </div>
+          <div class="overall-track">
+            <div class="overall-fill high" style="width:27%"></div>
+          </div>
+        </div>
+
+        <div class="meters-section">
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Opus</span>
+              <span class="meter-value">12 / 45 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill opus" style="width:27%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Sonnet</span>
+              <span class="meter-value">34 / 180 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill sonnet" style="width:19%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Haiku</span>
+              <span class="meter-value">8 / 500 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill haiku" style="width:2%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Claude Code</span>
+              <span class="meter-value">~$4.20 / $17.50</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill code" style="width:24%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window · est. token cost</span>
+          </div>
+        </div>
+
+        <div class="dropdown-footer">
+          <span class="reset-time">Window resets in 3h 42m</span>
+          <button class="refresh-btn">↻ Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENARIO B: Heavy usage -->
+  <div class="scenario">
+    <p class="scenario-title">Heavy Usage</p>
+    <div class="dropdown-container">
+      <div class="dropdown">
+        <div class="dropdown-arrow"></div>
+        <div class="dropdown-header">
+          <span class="dropdown-title">Claude Usage</span>
+          <span class="plan-badge">Max 5×</span>
+        </div>
+
+        <div class="overall-bar">
+          <div class="overall-label">
+            <span>Overall</span>
+            <span>82% used</span>
+          </div>
+          <div class="overall-track">
+            <div class="overall-fill low" style="width:82%"></div>
+          </div>
+        </div>
+
+        <div class="meters-section">
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Opus</span>
+              <span class="meter-value">41 / 45 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill opus" style="width:91%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window · ⚠ 4 remaining</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Sonnet</span>
+              <span class="meter-value">152 / 180 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill sonnet" style="width:84%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Haiku</span>
+              <span class="meter-value">89 / 500 msgs</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill haiku" style="width:18%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window</span>
+          </div>
+
+          <div class="meter-row">
+            <div class="meter-header">
+              <span class="meter-name">Claude Code</span>
+              <span class="meter-value">~$14.80 / $17.50</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill code" style="width:85%"></div>
+            </div>
+            <span class="meter-sublabel">5-hour window · est. token cost</span>
+          </div>
+        </div>
+
+        <div class="dropdown-footer">
+          <span class="reset-time">Window resets in 47m</span>
+          <button class="refresh-btn">↻ Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="page-divider">
+
+<!-- ═══════════════ SECTION 3: NOTIFICATIONS ═══════════════ -->
+<div class="notification-section">
+  <p class="section-label" style="text-align:center; max-width:none;">macOS Notifications</p>
+
+  <div style="display:flex; flex-direction:column; gap:16px; align-items:center;">
+    <div class="notification">
+      <div class="notif-icon">⚡</div>
+      <div class="notif-content">
+        <div class="notif-title">Claude Usage Warning</div>
+        <div class="notif-body">Opus messages 90% depleted — 4 remaining in current window. Resets in 47 minutes.</div>
+      </div>
+      <span class="notif-time">now</span>
+    </div>
+
+    <div class="notification">
+      <div class="notif-icon">🔄</div>
+      <div class="notif-content">
+        <div class="notif-title">Usage Window Reset</div>
+        <div class="notif-body">Your 5-hour usage window has reset. All model quotas are back to full.</div>
+      </div>
+      <span class="notif-time">2m ago</span>
+    </div>
+  </div>
+</div>
+
+<hr class="page-divider">
+
+<!-- ═══════════════ SECTION 4: ARCHITECTURE NOTES ═══════════════ -->
+<div style="max-width: 600px; margin: 0 auto; text-align: left;">
+  <p class="section-label">Architecture</p>
+  <div style="font-size: 13px; color: #aaa; line-height: 1.8;">
+    <p style="margin-bottom:12px;"><strong style="color:#e5e5ea;">Stack:</strong> Python 3 + rumps + py2app → native .app bundle</p>
+    <p style="margin-bottom:12px;"><strong style="color:#e5e5ea;">Data source:</strong> Session cookie auth → claude.ai internal API (same endpoints the settings page uses)</p>
+    <p style="margin-bottom:12px;"><strong style="color:#e5e5ea;">Polling:</strong> Every 60s (configurable), with immediate refresh on click</p>
+    <p style="margin-bottom:12px;"><strong style="color:#e5e5ea;">Notifications:</strong> Native macOS via <code style="background:#1c1c1e;padding:2px 6px;border-radius:3px;font-size:12px;">osascript</code> or <code style="background:#1c1c1e;padding:2px 6px;border-radius:3px;font-size:12px;">pync</code></p>
+    <p style="margin-bottom:12px;"><strong style="color:#e5e5ea;">Auth:</strong> One-time session cookie paste from browser, stored in macOS Keychain</p>
+    <p><strong style="color:#e5e5ea;">Size:</strong> ~5 MB bundled app</p>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+app/.venv/
+
+# Build artifacts
+app/build/
+app/dist/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Generated icons (rebuilt during install)
+AppIcon.icns
+AppIcon.png
+
+# HAR files (contain session cookies / sensitive data)
+*.har
+
+# IDE
+.vscode/
+.idea/
