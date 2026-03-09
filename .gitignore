@@ -22,6 +22,10 @@ AppIcon.png
 # HAR files (contain session cookies / sensitive data)
 *.har
 
+# Agent toolkit (separate repo)
+agent-toolkit/
+README-FOR-AGENTS.md
+
 # IDE
 .vscode/
 .idea/
