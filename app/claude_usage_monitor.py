@@ -341,6 +341,8 @@ class ClaudeUsageMonitor(rumps.App):
         self.usage_data = None
         self._notified_warning = False
         self._notified_critical = False
+        self._notified_budget_warning = False
+        self._notified_budget_critical = False
         self._icon_path = None
         self._last_error = None
         self._needs_refresh = True  # trigger initial load
@@ -428,6 +430,10 @@ class ClaudeUsageMonitor(rumps.App):
             print("[Refresh] Fetching usage data...")
             data = fetch_usage()
             if data:
+                # Log raw API response for debugging
+                raw = data.get("raw", {})
+                print(f"[Refresh] Raw API keys: {list(raw.keys())}")
+                print(f"[Refresh] Raw API response: {json.dumps(raw, indent=2, default=str)}")
                 self.usage_data = data
                 self._last_error = None
                 self._update_display()
@@ -443,21 +449,29 @@ class ClaudeUsageMonitor(rumps.App):
             print(f"[Refresh] Error: {e}", file=sys.stderr)
 
     def _update_display(self):
-        """Update menu bar title and dropdown items with live data."""
+        """Update menu bar title and dropdown items with live data.
+
+        The menu bar battery reflects rate limits only (5-hour and 7-day).
+        Extra usage is a spending budget — shown separately, not in the battery.
+        """
         if not self.usage_data:
             return
 
-        worst_pct = 0
+        worst_rate_pct = 0  # Only rate limits, not spending
 
         # Five-hour limit
         five = self.usage_data.get("five_hour")
         if five and five.get("utilization") is not None:
             pct = five["utilization"]
-            worst_pct = max(worst_pct, pct)
+            worst_rate_pct = max(worst_rate_pct, pct)
             marker = _status_emoji(pct)
             self._five_hour_header.title = f"{marker} 5-Hour Limit: {pct:.0f}% used"
             self._five_hour_bar.title = _bar_chars(pct)
-            self._five_hour_reset.title = f"  Resets in {_fmt_time_until(five.get('resets_at'))}"
+            reset_at = five.get("resets_at")
+            if pct == 0 and not reset_at:
+                self._five_hour_reset.title = "  Not limited"
+            else:
+                self._five_hour_reset.title = f"  Resets in {_fmt_time_until(reset_at)}"
         else:
             self._five_hour_header.title = "5-Hour Limit: N/A"
             self._five_hour_bar.title = "-" * 20
@@ -467,21 +481,24 @@ class ClaudeUsageMonitor(rumps.App):
         seven = self.usage_data.get("seven_day")
         if seven and seven.get("utilization") is not None:
             pct = seven["utilization"]
-            worst_pct = max(worst_pct, pct)
+            worst_rate_pct = max(worst_rate_pct, pct)
             marker = _status_emoji(pct)
             self._seven_day_header.title = f"{marker} 7-Day Limit: {pct:.0f}% used"
             self._seven_day_bar.title = _bar_chars(pct)
-            self._seven_day_reset.title = f"  Resets in {_fmt_time_until(seven.get('resets_at'))}"
+            reset_at = seven.get("resets_at")
+            if pct == 0 and not reset_at:
+                self._seven_day_reset.title = "  Not limited"
+            else:
+                self._seven_day_reset.title = f"  Resets in {_fmt_time_until(reset_at)}"
         else:
             self._seven_day_header.title = "7-Day Limit: N/A"
             self._seven_day_bar.title = "-" * 20
             self._seven_day_reset.title = "  Not applicable"
 
-        # Extra usage
+        # Extra usage (spending budget — separate from rate limits)
         extra = self.usage_data.get("extra_usage")
         if extra and extra.get("is_enabled"):
             pct = extra.get("utilization", 0)
-            worst_pct = max(worst_pct, pct)
             used = extra.get("used_credits", 0)
             limit = extra.get("monthly_limit", 0)
             marker = _status_emoji(pct)
@@ -493,8 +510,8 @@ class ClaudeUsageMonitor(rumps.App):
             self._extra_bar.title = "-" * 20
             self._extra_detail.title = "  Not enabled on this plan"
 
-        # Menu bar title (battery %)
-        pct_remaining = max(0, 100 - worst_pct)
+        # Menu bar title — battery reflects RATE LIMITS only, not spending
+        pct_remaining = max(0, 100 - worst_rate_pct)
         if self.config.get("show_percentage_in_menubar", True):
             self.title = f"\u26A1 {int(pct_remaining)}%"
         else:
@@ -525,26 +542,45 @@ class ClaudeUsageMonitor(rumps.App):
         if not self.usage_data:
             return
 
+        # Rate limit notifications (5-hour)
         five = self.usage_data.get("five_hour")
-        if not five or five.get("utilization") is None:
-            return
+        if five and five.get("utilization") is not None:
+            pct = five["utilization"]
 
-        pct = five["utilization"]
+            if pct >= self.config.get("notify_critical", 95) and not self._notified_critical:
+                self._notified_critical = True
+                reset_in = _fmt_time_until(five.get("resets_at"))
+                send_notification(
+                    "Claude Rate Limit Critical",
+                    f"5-hour limit at {pct:.0f}%. Resets in {reset_in}.",
+                )
+            elif pct >= self.config.get("notify_warning", 80) and not self._notified_warning:
+                self._notified_warning = True
+                reset_in = _fmt_time_until(five.get("resets_at"))
+                send_notification(
+                    "Claude Rate Limit Warning",
+                    f"5-hour limit at {pct:.0f}%. Resets in {reset_in}.",
+                )
 
-        if pct >= self.config.get("notify_critical", 95) and not self._notified_critical:
-            self._notified_critical = True
-            reset_in = _fmt_time_until(five.get("resets_at"))
-            send_notification(
-                "Claude Usage Critical",
-                f"5-hour limit at {pct:.0f}%. Resets in {reset_in}.",
-            )
-        elif pct >= self.config.get("notify_warning", 80) and not self._notified_warning:
-            self._notified_warning = True
-            reset_in = _fmt_time_until(five.get("resets_at"))
-            send_notification(
-                "Claude Usage Warning",
-                f"5-hour limit at {pct:.0f}%. Resets in {reset_in}.",
-            )
+        # Budget notifications (extra usage spending)
+        extra = self.usage_data.get("extra_usage")
+        if extra and extra.get("is_enabled"):
+            budget_pct = extra.get("utilization", 0)
+            used = extra.get("used_credits", 0)
+            limit = extra.get("monthly_limit", 0)
+
+            if budget_pct >= 95 and not self._notified_budget_critical:
+                self._notified_budget_critical = True
+                send_notification(
+                    "Claude Budget Almost Exhausted",
+                    f"Extra usage at ${used/100:.2f} / ${limit/100:.2f} ({budget_pct:.0f}%).",
+                )
+            elif budget_pct >= 80 and not self._notified_budget_warning:
+                self._notified_budget_warning = True
+                send_notification(
+                    "Claude Budget Warning",
+                    f"Extra usage at ${used/100:.2f} / ${limit/100:.2f} ({budget_pct:.0f}%).",
+                )
 
     # ─── Timer callback (MAIN THREAD) ────────────────────────────────
 
@@ -565,6 +601,8 @@ class ClaudeUsageMonitor(rumps.App):
     def _on_refresh(self, _):
         self._notified_warning = False
         self._notified_critical = False
+        self._notified_budget_warning = False
+        self._notified_budget_critical = False
         self._refresh_data()
 
     def _on_open_browser(self, _):
