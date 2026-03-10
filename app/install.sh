@@ -191,6 +191,7 @@ PLIST_EOF
     cat > "$MACOS_DIR/launcher" << LAUNCHER_EOF
 #!/usr/bin/env bash
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+export PYTHONUNBUFFERED=1
 mkdir -p "$HOME/.claude-usage-monitor"
 LOGFILE="$HOME/.claude-usage-monitor/app.log"
 exec >> "\$LOGFILE" 2>&1
