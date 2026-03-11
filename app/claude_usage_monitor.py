@@ -526,10 +526,15 @@ class ClaudeUsageMonitor(rumps.App):
         self.menu.add(self._extra_detail)
         self.menu.add(rumps.separator)
 
-        # Git Repos (submenu — easy to clear and repopulate)
-        self._git_menu = rumps.MenuItem("🔀 Agent Repos")
-        self._git_menu.add(rumps.MenuItem("Scanning..."))
-        self.menu.add(self._git_menu)
+        # Git Repos — pre-allocate slots, update titles each refresh
+        MAX_GIT_SLOTS = 12
+        self._git_header = rumps.MenuItem("🔀 Agent Repos")
+        self.menu.add(self._git_header)
+        self._git_slots = []
+        for i in range(MAX_GIT_SLOTS):
+            item = rumps.MenuItem(f"  Scanning..." if i == 0 else "")
+            self._git_slots.append(item)
+            self.menu.add(item)
         self.menu.add(rumps.separator)
 
         # Status line
@@ -737,22 +742,24 @@ class ClaudeUsageMonitor(rumps.App):
     # ─── Git repo status ────────────────────────────────────────────
 
     def _refresh_git_status(self):
-        """Scan cowork directory and update git repo status submenu."""
+        """Scan cowork directory and update git repo status slots."""
         cowork_dir = self.config.get("cowork_dir", "~/Documents/Claude Cowork")
         repos = scan_git_repos(cowork_dir)
 
-        # Clear existing submenu items
-        self._git_menu.clear()
-
         if not repos:
-            self._git_menu.add(rumps.MenuItem("No repos found"))
+            self._git_slots[0].title = "  No repos found"
+            for slot in self._git_slots[1:]:
+                slot.title = ""
             return
 
-        for display_name, repo_path in repos:
-            status = get_repo_status(repo_path)
-            icon, desc = format_repo_status(status)
-            title = f"{icon}  {display_name} — {desc}"
-            self._git_menu.add(rumps.MenuItem(title))
+        for i, slot in enumerate(self._git_slots):
+            if i < len(repos):
+                display_name, repo_path = repos[i]
+                status = get_repo_status(repo_path)
+                icon, desc = format_repo_status(status)
+                slot.title = f"  {icon}  {display_name} — {desc}"
+            else:
+                slot.title = ""
 
         print(f"[Git] Updated {len(repos)} repos")
 
