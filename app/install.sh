@@ -129,26 +129,117 @@ if [ "$BUILD_OK" = false ]; then
         echo -e "  ${YELLOW}No icon generated, continuing without custom icon${NC}"
     fi
 
-    # Create the launcher script
-    cat > "$MACOS_DIR/launcher" << 'LAUNCHER_EOF'
+    # Compile a native C launcher binary — required for macOS TCC to
+    # attribute file access to our .app bundle instead of python3
+    echo -e "  Compiling native launcher..."
+    cat > "$MACOS_DIR/launcher.c" << 'LAUNCHER_C_EOF'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <libgen.h>
+#include <mach-o/dyld.h>
+#include <sys/stat.h>
+
+int main(int argc, char *argv[]) {
+    /* Find our own path to derive Resources dir */
+    char exe_path[4096];
+    uint32_t size = sizeof(exe_path);
+    if (_NSGetExecutablePath(exe_path, &size) != 0) {
+        fprintf(stderr, "Failed to get executable path\n");
+        return 1;
+    }
+
+    /* Resolve symlinks */
+    char real_path[4096];
+    if (realpath(exe_path, real_path) == NULL) {
+        fprintf(stderr, "Failed to resolve path\n");
+        return 1;
+    }
+
+    /* Build Resources path: .../Contents/MacOS/launcher -> .../Contents/Resources */
+    char *macos_dir = dirname(real_path);
+    char resources_dir[4096];
+    snprintf(resources_dir, sizeof(resources_dir), "%s/../Resources", macos_dir);
+
+    char resources_real[4096];
+    if (realpath(resources_dir, resources_real) == NULL) {
+        fprintf(stderr, "Failed to resolve Resources dir\n");
+        return 1;
+    }
+
+    /* Build paths */
+    char script_path[4096];
+    snprintf(script_path, sizeof(script_path), "%s/claude_usage_monitor.py", resources_real);
+
+    char *home = getenv("HOME");
+    if (!home) {
+        fprintf(stderr, "HOME not set\n");
+        return 1;
+    }
+
+    char venv_python[4096];
+    snprintf(venv_python, sizeof(venv_python), "%s/.claude-usage-monitor/.venv/bin/python3", home);
+
+    char log_dir[4096];
+    snprintf(log_dir, sizeof(log_dir), "%s/.claude-usage-monitor", home);
+    mkdir(log_dir, 0755);
+
+    char log_path[4096];
+    snprintf(log_path, sizeof(log_path), "%s/app.log", log_dir);
+
+    /* Redirect stdout/stderr to log file */
+    FILE *log_file = fopen(log_path, "a");
+    if (log_file) {
+        dup2(fileno(log_file), STDOUT_FILENO);
+        dup2(fileno(log_file), STDERR_FILENO);
+        fclose(log_file);
+    }
+
+    printf("\n=== Launch (native) ===\n");
+    printf("Script: %s\n", script_path);
+    printf("Python: %s\n", venv_python);
+
+    /* Set environment */
+    setenv("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES", 1);
+    setenv("PYTHONUNBUFFERED", "1", 1);
+
+    /* Check if venv python exists */
+    struct stat st;
+    if (stat(venv_python, &st) == 0) {
+        printf("Using venv python3\n");
+        fflush(stdout);
+        execl(venv_python, "python3", script_path, NULL);
+    } else {
+        /* Fallback to system python */
+        printf("Venv not found, using system python3\n");
+        fflush(stdout);
+        execlp("python3", "python3", script_path, NULL);
+    }
+
+    /* If exec fails */
+    perror("exec failed");
+    return 1;
+}
+LAUNCHER_C_EOF
+
+    cc -o "$MACOS_DIR/launcher" "$MACOS_DIR/launcher.c" -framework Foundation 2>&1
+    if [ $? -eq 0 ]; then
+        rm "$MACOS_DIR/launcher.c"
+        echo -e "  ${GREEN}Native launcher compiled${NC}"
+    else
+        echo -e "  ${RED}Native compilation failed — falling back to shell script${NC}"
+        rm -f "$MACOS_DIR/launcher.c" "$MACOS_DIR/launcher"
+        cat > "$MACOS_DIR/launcher" << 'LAUNCHER_FALLBACK_EOF'
 #!/usr/bin/env bash
-# Locate the venv relative to where the .app was installed from
-SCRIPT_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
-
-# Check multiple venv locations
-if [ -f "$SCRIPT_DIR/../../.venv/bin/activate" ]; then
-    VENV_DIR="$SCRIPT_DIR/../../.venv"
-elif [ -f "$HOME/.claude-usage-monitor/.venv/bin/activate" ]; then
-    VENV_DIR="$HOME/.claude-usage-monitor/.venv"
-else
-    # Fallback: try system python with the packages
-    exec python3 "$SCRIPT_DIR/claude_usage_monitor.py"
-fi
-
-source "$VENV_DIR/bin/activate"
-exec python3 "$SCRIPT_DIR/claude_usage_monitor.py"
-LAUNCHER_EOF
-    chmod +x "$MACOS_DIR/launcher"
+RESOURCES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
+VENV_DIR="$HOME/.claude-usage-monitor/.venv"
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+export PYTHONUNBUFFERED=1
+exec "$VENV_DIR/bin/python3" "$RESOURCES_DIR/claude_usage_monitor.py"
+LAUNCHER_FALLBACK_EOF
+        chmod +x "$MACOS_DIR/launcher"
+    fi
 
     # Create Info.plist
     cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST_EOF'
@@ -189,40 +280,11 @@ PLIST_EOF
     rm -rf "$STABLE_VENV"
     cp -R "$VENV_DIR" "$STABLE_VENV"
 
-    # Update launcher to use stable venv with logging
-    cat > "$MACOS_DIR/launcher" << LAUNCHER_EOF
-#!/usr/bin/env bash
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
-export PYTHONUNBUFFERED=1
-mkdir -p "$HOME/.claude-usage-monitor"
-LOGFILE="$HOME/.claude-usage-monitor/app.log"
-exec >> "\$LOGFILE" 2>&1
-echo ""
-echo "=== Launch at \$(date) ==="
-
-RESOURCES_DIR="\$(cd "\$(dirname "\$0")/../Resources" && pwd)"
-VENV_DIR="$HOME/.claude-usage-monitor/.venv"
-echo "Resources: \$RESOURCES_DIR"
-echo "Venv: \$VENV_DIR"
-
-if [ -f "\$VENV_DIR/bin/python3" ]; then
-    echo "Using venv python3"
-    "\$VENV_DIR/bin/python3" "\$RESOURCES_DIR/claude_usage_monitor.py"
-    echo "App exited with code: \$?"
-elif [ -f "\$VENV_DIR/bin/activate" ]; then
-    echo "Sourcing venv activate"
-    source "\$VENV_DIR/bin/activate"
-    python3 "\$RESOURCES_DIR/claude_usage_monitor.py"
-    echo "App exited with code: \$?"
-else
-    echo "ERROR: venv not found at \$VENV_DIR"
-    exit 1
-fi
-LAUNCHER_EOF
-    chmod +x "$MACOS_DIR/launcher"
+    # Native launcher already handles the stable venv path
+    # (~/.claude-usage-monitor/.venv/bin/python3)
 
     BUILD_OK=true
-    echo -e "  ${GREEN}Shell-wrapper .app built successfully${NC}"
+    echo -e "  ${GREEN}.app bundle built successfully${NC}"
 fi
 
 echo ""
