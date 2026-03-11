@@ -176,6 +176,8 @@ LAUNCHER_EOF
     <string>AppIcon</string>
     <key>NSHumanReadableCopyright</key>
     <string>MIT License</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Claude Usage Monitor needs access to your Documents folder to check git repo status of your agent projects.</string>
 </dict>
 </plist>
 PLIST_EOF
@@ -245,6 +247,11 @@ if [ -d "$APP_PATH" ] && [ "$BUILD_OK" = true ]; then
     # Without this, the app can't read ~/Documents, ~/Downloads, etc.
     echo -e "  Signing .app bundle (ad-hoc)..."
     codesign --force --sign - "/Applications/$APP_NAME.app"
+
+    # Reset any cached TCC denial for this bundle ID so macOS re-prompts
+    echo -e "  Resetting file access permissions (may require password)..."
+    tccutil reset SystemPolicyDocumentsFolder com.claude.usage-monitor 2>/dev/null || true
+
     echo -e "  ${GREEN}Installed to /Applications/$APP_NAME.app${NC}"
     echo ""
 
