@@ -281,34 +281,37 @@ def send_notification(title, message, sound=True):
 # ═════════════════════════════════════════════════════════════════════
 
 def scan_git_repos(base_dir):
-    """Scan a directory for git repos, including one level of nesting.
+    """Scan cowork workspace folders for git repos.
 
-    Returns list of (display_name, abs_path) sorted by display_name.
-    E.g. [("claude-usage-monitor", "/path/to/it"),
-          ("claude-usage-monitor/agent-toolkit", "/path/to/it/agent-toolkit")]
+    Structure: base_dir / workspace_folder / repo_folder / .git
+    E.g. ~/Documents/Claude Cowork/Claude Usage Monitor/agent-toolkit/.git
+
+    Returns list of (display_name, abs_path, is_git) tuples.
+    Display names use "workspace/repo" format for nested repos.
     """
     base = Path(base_dir).expanduser()
     if not base.is_dir():
         return []
 
     repos = []
-    for child in sorted(base.iterdir()):
-        if not child.is_dir() or child.name.startswith("."):
+    for workspace in sorted(base.iterdir()):
+        if not workspace.is_dir() or workspace.name.startswith("."):
             continue
-        # Check if this directory is a git repo
-        is_git = (child / ".git").exists()
-        repos.append((child.name, str(child), is_git))
-        # Check one level deeper for nested repos (e.g. agent-toolkit/)
-        if is_git:
-            try:
-                for grandchild in sorted(child.iterdir()):
-                    if not grandchild.is_dir() or grandchild.name.startswith("."):
-                        continue
-                    if (grandchild / ".git").exists():
-                        display = f"{child.name}/{grandchild.name}"
-                        repos.append((display, str(grandchild), True))
-            except PermissionError:
-                pass
+
+        # Check if workspace itself is a git repo
+        if (workspace / ".git").exists():
+            repos.append((workspace.name, str(workspace), True))
+
+        # Scan subfolders of the workspace for git repos
+        try:
+            for child in sorted(workspace.iterdir()):
+                if not child.is_dir() or child.name.startswith("."):
+                    continue
+                if (child / ".git").exists():
+                    display = f"{workspace.name}/{child.name}"
+                    repos.append((display, str(child), True))
+        except PermissionError:
+            pass
     return repos
 
 
@@ -531,7 +534,7 @@ class ClaudeUsageMonitor(rumps.App):
         self.menu.add(rumps.separator)
 
         # Git Repos — pre-allocate slots with unique keys (rumps uses title as dict key)
-        MAX_GIT_SLOTS = 12
+        MAX_GIT_SLOTS = 20
         self._git_header = rumps.MenuItem("🔀 Agent Repos")
         self.menu.add(self._git_header)
         self._git_slots = []
@@ -677,9 +680,9 @@ class ClaudeUsageMonitor(rumps.App):
         # Menu bar title — battery reflects RATE LIMITS only, not spending
         pct_remaining = max(0, 100 - worst_rate_pct)
         if self.config.get("show_percentage_in_menubar", True):
-            self.title = f"{int(pct_remaining)}%"
+            self.title = f"⚡{int(pct_remaining)}%"
         else:
-            self.title = "—"
+            self.title = "⚡"
 
         # Icon
         icon_path = generate_battery_icon(pct_remaining)
@@ -696,7 +699,7 @@ class ClaudeUsageMonitor(rumps.App):
 
     def _update_error_display(self):
         """Show error state in menu bar."""
-        self.title = "---"
+        self.title = "⚡---"
         self._status_item.title = "\u26A0\uFE0F Open claude.ai in Chrome to connect"
 
     def _check_notifications(self):
@@ -771,12 +774,7 @@ class ClaudeUsageMonitor(rumps.App):
 
         for i, slot in enumerate(self._git_slots):
             if i < len(repos):
-                display_name, repo_path, is_git = repos[i]
-                if not is_git:
-                    # Non-git project — just show folder name, no status
-                    slot.title = f"  📁  {display_name}"
-                    print(f"[Git]   📁 {display_name}: not a git repo")
-                    continue
+                display_name, repo_path, _is_git = repos[i]
                 try:
                     status = get_repo_status(repo_path)
                     icon, desc = format_repo_status(status)
@@ -848,7 +846,7 @@ class ClaudeUsageMonitor(rumps.App):
         """Remove the stored session cookie."""
         clear_cookie()
         self.usage_data = None
-        self.title = "---"
+        self.title = "⚡---"
         self._status_item.title = "Cookie cleared"
         rumps.alert(
             title="Cookie Cleared",
