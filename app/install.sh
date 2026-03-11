@@ -240,6 +240,11 @@ if [ -d "$APP_PATH" ] && [ "$BUILD_OK" = true ]; then
     fi
 
     cp -R "$APP_PATH" "/Applications/"
+
+    # Ad-hoc code sign — required for macOS TCC to grant ambient file access
+    # Without this, the app can't read ~/Documents, ~/Downloads, etc.
+    echo -e "  Signing .app bundle (ad-hoc)..."
+    codesign --force --sign - "/Applications/$APP_NAME.app"
     echo -e "  ${GREEN}Installed to /Applications/$APP_NAME.app${NC}"
     echo ""
 
