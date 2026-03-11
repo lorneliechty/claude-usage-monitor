@@ -684,14 +684,14 @@ class ClaudeUsageMonitor(rumps.App):
         else:
             self.title = "⚡"
 
-        # Icon
-        icon_path = generate_battery_icon(pct_remaining)
-        if icon_path and icon_path != self._icon_path:
-            try:
-                self.icon = icon_path
-                self._icon_path = icon_path
-            except Exception:
-                pass
+        # Icon — disabled, ⚡ percentage is sufficient
+        # icon_path = generate_battery_icon(pct_remaining)
+        # if icon_path and icon_path != self._icon_path:
+        #     try:
+        #         self.icon = icon_path
+        #         self._icon_path = icon_path
+        #     except Exception:
+        #         pass
 
         # Status
         now = datetime.now().strftime("%H:%M")
