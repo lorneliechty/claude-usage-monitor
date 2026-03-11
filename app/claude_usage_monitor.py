@@ -296,15 +296,19 @@ def scan_git_repos(base_dir):
         if not child.is_dir() or child.name.startswith("."):
             continue
         # Check if this directory is a git repo
-        if (child / ".git").exists():
-            repos.append((child.name, str(child)))
-            # Check one level deeper for nested repos (e.g. agent-toolkit/)
-            for grandchild in sorted(child.iterdir()):
-                if not grandchild.is_dir() or grandchild.name.startswith("."):
-                    continue
-                if (grandchild / ".git").exists():
-                    display = f"{child.name}/{grandchild.name}"
-                    repos.append((display, str(grandchild)))
+        is_git = (child / ".git").exists()
+        repos.append((child.name, str(child), is_git))
+        # Check one level deeper for nested repos (e.g. agent-toolkit/)
+        if is_git:
+            try:
+                for grandchild in sorted(child.iterdir()):
+                    if not grandchild.is_dir() or grandchild.name.startswith("."):
+                        continue
+                    if (grandchild / ".git").exists():
+                        display = f"{child.name}/{grandchild.name}"
+                        repos.append((display, str(grandchild), True))
+            except PermissionError:
+                pass
     return repos
 
 
@@ -673,9 +677,9 @@ class ClaudeUsageMonitor(rumps.App):
         # Menu bar title — battery reflects RATE LIMITS only, not spending
         pct_remaining = max(0, 100 - worst_rate_pct)
         if self.config.get("show_percentage_in_menubar", True):
-            self.title = f"\u26A1 {int(pct_remaining)}%"
+            self.title = f"{int(pct_remaining)}%"
         else:
-            self.title = "\u26A1"
+            self.title = "—"
 
         # Icon
         icon_path = generate_battery_icon(pct_remaining)
@@ -692,7 +696,7 @@ class ClaudeUsageMonitor(rumps.App):
 
     def _update_error_display(self):
         """Show error state in menu bar."""
-        self.title = "\u26A1 ---"
+        self.title = "---"
         self._status_item.title = "\u26A0\uFE0F Open claude.ai in Chrome to connect"
 
     def _check_notifications(self):
@@ -767,11 +771,16 @@ class ClaudeUsageMonitor(rumps.App):
 
         for i, slot in enumerate(self._git_slots):
             if i < len(repos):
-                display_name, repo_path = repos[i]
+                display_name, repo_path, is_git = repos[i]
+                if not is_git:
+                    # Non-git project — just show folder name, no status
+                    slot.title = f"  📁  {display_name}"
+                    print(f"[Git]   📁 {display_name}: not a git repo")
+                    continue
                 try:
                     status = get_repo_status(repo_path)
                     icon, desc = format_repo_status(status)
-                    slot.title = f"  {icon}  {display_name} — {desc}"
+                    slot.title = f"  {icon}  {display_name}"
                     print(f"[Git]   {icon} {display_name}: {desc}")
                 except Exception as e:
                     slot.title = f"  ⚠️  {display_name} — error"
@@ -839,7 +848,7 @@ class ClaudeUsageMonitor(rumps.App):
         """Remove the stored session cookie."""
         clear_cookie()
         self.usage_data = None
-        self.title = "\u26A1 ---"
+        self.title = "---"
         self._status_item.title = "Cookie cleared"
         rumps.alert(
             title="Cookie Cleared",
