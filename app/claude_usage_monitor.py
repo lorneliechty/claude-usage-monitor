@@ -533,7 +533,8 @@ class ClaudeUsageMonitor(rumps.App):
         self._git_slots = []
         for i in range(MAX_GIT_SLOTS):
             # Each slot needs a unique title to avoid key collisions in rumps OrderedDict
-            placeholder = "  Scanning..." if i == 0 else f"  \u200b{'.' * i}"
+            # Use non-breaking spaces (invisible but unique per slot)
+            placeholder = "  Scanning..." if i == 0 else ("\u00a0" * (i + 1))
             item = rumps.MenuItem(placeholder)
             self._git_slots.append(item)
             self.menu.add(item)
@@ -753,13 +754,15 @@ class ClaudeUsageMonitor(rumps.App):
             print(f"[Git] Found {len(repos)} repos: {[r[0] for r in repos]}")
         except Exception as e:
             print(f"[Git] Scan error: {e}", file=sys.stderr)
-            self._git_slots[0].title = f"  ⚠️ Scan error"
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            self._git_slots[0].title = f"  ⚠️ {e}"
             return
 
         if not repos:
             self._git_slots[0].title = "  No repos found"
             for i, slot in enumerate(self._git_slots[1:], start=1):
-                slot.title = f"  \u200b{chr(0x200c + i)}"  # unique invisible
+                slot.title = "\u00a0" * (i + 1)  # unique invisible
             return
 
         for i, slot in enumerate(self._git_slots):
@@ -775,7 +778,7 @@ class ClaudeUsageMonitor(rumps.App):
                     print(f"[Git]   Error for {display_name}: {e}", file=sys.stderr)
             else:
                 # Unique invisible placeholder — avoids rumps key collisions
-                slot.title = f"  \u200b{chr(0x200c + i)}"
+                slot.title = "\u00a0" * (i + 1)
 
         print(f"[Git] Updated {len(repos)} repos")
 
