@@ -140,6 +140,26 @@ if [ "$BUILD_OK" = false ]; then
 #include <libgen.h>
 #include <mach-o/dyld.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <signal.h>
+
+/*
+ * Native launcher for macOS TCC compatibility.
+ *
+ * We fork+exec Python as a child process instead of execl() because:
+ * - execl() replaces the process image, so TCC sees python3 not our bundle
+ * - fork+exec keeps this Mach-O binary alive as the parent process
+ * - TCC grants from our signed .app bundle flow to child processes
+ * - The parent waits for the child and forwards signals
+ */
+
+static pid_t child_pid = 0;
+
+static void forward_signal(int sig) {
+    if (child_pid > 0) {
+        kill(child_pid, sig);
+    }
+}
 
 int main(int argc, char *argv[]) {
     /* Find our own path to derive Resources dir */
@@ -196,30 +216,61 @@ int main(int argc, char *argv[]) {
         fclose(log_file);
     }
 
-    printf("\n=== Launch (native) ===\n");
+    printf("\n=== Launch (native, fork+exec) ===\n");
     printf("Script: %s\n", script_path);
     printf("Python: %s\n", venv_python);
+    fflush(stdout);
 
     /* Set environment */
     setenv("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES", 1);
     setenv("PYTHONUNBUFFERED", "1", 1);
 
-    /* Check if venv python exists */
+    /* Determine which python to use */
     struct stat st;
+    const char *python_bin = NULL;
     if (stat(venv_python, &st) == 0) {
+        python_bin = venv_python;
         printf("Using venv python3\n");
-        fflush(stdout);
-        execl(venv_python, "python3", script_path, NULL);
     } else {
-        /* Fallback to system python */
+        python_bin = "python3";
         printf("Venv not found, using system python3\n");
-        fflush(stdout);
-        execlp("python3", "python3", script_path, NULL);
+    }
+    fflush(stdout);
+
+    /* Fork + exec: keep native binary alive as parent for TCC */
+    child_pid = fork();
+    if (child_pid < 0) {
+        perror("fork failed");
+        return 1;
     }
 
-    /* If exec fails */
-    perror("exec failed");
-    return 1;
+    if (child_pid == 0) {
+        /* Child: exec Python */
+        if (python_bin == venv_python) {
+            execl(venv_python, "python3", script_path, NULL);
+        } else {
+            execlp("python3", "python3", script_path, NULL);
+        }
+        perror("exec failed");
+        _exit(1);
+    }
+
+    /* Parent: forward signals to child and wait */
+    signal(SIGTERM, forward_signal);
+    signal(SIGINT, forward_signal);
+    signal(SIGHUP, forward_signal);
+
+    int status;
+    waitpid(child_pid, &status, 0);
+
+    if (WIFEXITED(status)) {
+        printf("Python exited with code: %d\n", WEXITSTATUS(status));
+        return WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+        printf("Python killed by signal: %d\n", WTERMSIG(status));
+        return 128 + WTERMSIG(status);
+    }
+    return 0;
 }
 LAUNCHER_C_EOF
 
