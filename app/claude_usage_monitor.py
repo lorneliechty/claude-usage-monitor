@@ -16,6 +16,7 @@ os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
 import sys
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -85,6 +86,7 @@ def load_config():
         "notifications_enabled": True,
         "show_percentage_in_menubar": True,
         "last_notification_id": None,
+        "cowork_dir": "~/Documents/Claude Cowork",
     }
     os.makedirs(CONFIG_DIR, exist_ok=True)
     if os.path.exists(CONFIG_FILE):
@@ -275,6 +277,144 @@ def send_notification(title, message, sound=True):
 
 
 # ═════════════════════════════════════════════════════════════════════
+# GIT REPO STATUS
+# ═════════════════════════════════════════════════════════════════════
+
+def scan_git_repos(base_dir):
+    """Scan a directory for git repos, including one level of nesting.
+
+    Returns list of (display_name, abs_path) sorted by display_name.
+    E.g. [("claude-usage-monitor", "/path/to/it"),
+          ("claude-usage-monitor/agent-toolkit", "/path/to/it/agent-toolkit")]
+    """
+    base = Path(base_dir).expanduser()
+    if not base.is_dir():
+        return []
+
+    repos = []
+    for child in sorted(base.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        # Check if this directory is a git repo
+        if (child / ".git").exists():
+            repos.append((child.name, str(child)))
+            # Check one level deeper for nested repos (e.g. agent-toolkit/)
+            for grandchild in sorted(child.iterdir()):
+                if not grandchild.is_dir() or grandchild.name.startswith("."):
+                    continue
+                if (grandchild / ".git").exists():
+                    display = f"{child.name}/{grandchild.name}"
+                    repos.append((display, str(grandchild)))
+    return repos
+
+
+def get_repo_status(repo_path):
+    """Get git sync status for a repo.
+
+    Returns dict with keys:
+      branch: str - current branch name
+      ahead: int - commits ahead of remote
+      behind: int - commits behind remote
+      dirty: bool - has uncommitted changes
+      has_remote: bool - has a tracking branch
+      error: str|None - error message if git commands failed
+    """
+    result = {
+        "branch": "unknown",
+        "ahead": 0,
+        "behind": 0,
+        "dirty": False,
+        "has_remote": False,
+        "error": None,
+    }
+
+    try:
+        # Fetch from remote (timeout to avoid blocking UI)
+        subprocess.run(
+            ["git", "-C", repo_path, "fetch", "--quiet"],
+            timeout=5, capture_output=True,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"[Git] Fetch timeout for {repo_path}", file=sys.stderr)
+    except Exception as e:
+        print(f"[Git] Fetch error for {repo_path}: {e}", file=sys.stderr)
+
+    try:
+        # Get branch + ahead/behind + porcelain status
+        proc = subprocess.run(
+            ["git", "-C", repo_path, "status", "--porcelain=v1", "--branch"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode != 0:
+            result["error"] = proc.stderr.strip() or "git status failed"
+            return result
+
+        lines = proc.stdout.strip().split("\n")
+        if not lines:
+            return result
+
+        # Parse branch line: ## main...origin/main [ahead 3, behind 2]
+        branch_line = lines[0]
+        branch_match = re.match(r"## (\S+?)(?:\.\.\.(\S+))?(?:\s+\[(.+)\])?$", branch_line)
+        if branch_match:
+            result["branch"] = branch_match.group(1)
+            result["has_remote"] = branch_match.group(2) is not None
+            tracking_info = branch_match.group(3) or ""
+            ahead_m = re.search(r"ahead (\d+)", tracking_info)
+            behind_m = re.search(r"behind (\d+)", tracking_info)
+            if ahead_m:
+                result["ahead"] = int(ahead_m.group(1))
+            if behind_m:
+                result["behind"] = int(behind_m.group(1))
+
+        # Any non-branch lines = dirty working tree
+        status_lines = [l for l in lines[1:] if l.strip()]
+        result["dirty"] = len(status_lines) > 0
+
+    except subprocess.TimeoutExpired:
+        result["error"] = "timeout"
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def format_repo_status(status):
+    """Format a repo status dict into a display string.
+
+    Returns (icon, description) tuple.
+    """
+    if status.get("error"):
+        return "⚠️", "error"
+
+    if not status["has_remote"]:
+        return "—", "no remote"
+
+    parts = []
+    icon = "✓"
+
+    if status["ahead"] > 0 and status["behind"] > 0:
+        icon = "⬆⬇"
+        parts.append("diverged")
+    elif status["ahead"] > 0:
+        icon = "⬆"
+        parts.append(f"{status['ahead']} ahead")
+    elif status["behind"] > 0:
+        icon = "⬇"
+        parts.append(f"{status['behind']} behind")
+
+    if status["dirty"]:
+        if icon == "✓":
+            icon = "✎"
+        parts.append("uncommitted")
+
+    if not parts:
+        parts.append("in sync")
+
+    return icon, ", ".join(parts)
+
+
+# ═════════════════════════════════════════════════════════════════════
 # HELPERS
 # ═════════════════════════════════════════════════════════════════════
 
@@ -386,6 +526,12 @@ class ClaudeUsageMonitor(rumps.App):
         self.menu.add(self._extra_detail)
         self.menu.add(rumps.separator)
 
+        # Git Repos (submenu — easy to clear and repopulate)
+        self._git_menu = rumps.MenuItem("🔀 Agent Repos")
+        self._git_menu.add(rumps.MenuItem("Scanning..."))
+        self.menu.add(self._git_menu)
+        self.menu.add(rumps.separator)
+
         # Status line
         self._status_item = rumps.MenuItem("Status: Starting up...")
         self.menu.add(self._status_item)
@@ -447,6 +593,12 @@ class ClaudeUsageMonitor(rumps.App):
             self._last_error = str(e)
             self._update_error_display()
             print(f"[Refresh] Error: {e}", file=sys.stderr)
+
+        # Git repo status (runs regardless of usage data success)
+        try:
+            self._refresh_git_status()
+        except Exception as e:
+            print(f"[Git] Error refreshing status: {e}", file=sys.stderr)
 
     def _update_display(self):
         """Update menu bar title and dropdown items with live data.
@@ -581,6 +733,28 @@ class ClaudeUsageMonitor(rumps.App):
                     "Claude Budget Warning",
                     f"Extra usage at ${used/100:.2f} / ${limit/100:.2f} ({budget_pct:.0f}%).",
                 )
+
+    # ─── Git repo status ────────────────────────────────────────────
+
+    def _refresh_git_status(self):
+        """Scan cowork directory and update git repo status submenu."""
+        cowork_dir = self.config.get("cowork_dir", "~/Documents/Claude Cowork")
+        repos = scan_git_repos(cowork_dir)
+
+        # Clear existing submenu items
+        self._git_menu.clear()
+
+        if not repos:
+            self._git_menu.add(rumps.MenuItem("No repos found"))
+            return
+
+        for display_name, repo_path in repos:
+            status = get_repo_status(repo_path)
+            icon, desc = format_repo_status(status)
+            title = f"{icon}  {display_name} — {desc}"
+            self._git_menu.add(rumps.MenuItem(title))
+
+        print(f"[Git] Updated {len(repos)} repos")
 
     # ─── Timer callback (MAIN THREAD) ────────────────────────────────
 
